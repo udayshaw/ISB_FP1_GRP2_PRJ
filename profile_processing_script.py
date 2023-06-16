@@ -71,7 +71,7 @@ class data_processing:
         Base = declarative_base()
 
         class table_schema(Base):
-            __tablename__ = 'input_resumes_test'
+            __tablename__ = 'input_resumes'
 
             profileId = Column(String, primary_key=True)
             resume = Column(String)

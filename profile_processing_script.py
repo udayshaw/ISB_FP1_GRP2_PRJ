@@ -24,7 +24,7 @@ class data_processing:
     nlp = spacy.load("en_core_web_sm")
 
     # Create a file handler
-    log_file = 'log_file.log'
+    log_file = '/var/log/FP1_logs/log_file.log'
     file_handler = logging.FileHandler(log_file)
 
     # Configure the log file handler

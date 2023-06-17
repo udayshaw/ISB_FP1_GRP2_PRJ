@@ -146,10 +146,10 @@ class data_processing:
         df_out=pd.DataFrame(df_list,columns=["token","tfidf","profile_id"])
         grouped = df_out.groupby('profile_id')['tfidf'].sum()
         sorted_descending = grouped.sort_values(ascending=False).reset_index()
-        sorted_descending["Download Profile"]="file:///resumes_corpus/"+sorted_descending["profile_id"]+".txt"
+        sorted_descending["Download Profile"]="/resumes_corpus/"+sorted_descending["profile_id"]+".txt"
         sorted_descending=sorted_descending.rename(columns={'tfidf': 'tfidf score'})
         html_table=sorted_descending.head(10).to_html(index=False, escape=False, classes='table table-bordered table-striped')
-        html_table = html_table.replace('<td>file:', '<td><a href="files/'). \
-                        replace('.txt</td>', '.txt">download</td>'). \
+        html_table = html_table.replace('<td>/resumes_corpus/', '<td><a href="/resumes_corpus/'). \
+                        replace('.txt</td>', '.txt" target="_blank">download</td>'). \
                         replace('</td>', '</a></td>')
         return html_table

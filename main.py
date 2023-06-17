@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/resumes_corpus", StaticFiles(directory="resumes_corpus"), name="resumes_corpus")
 
 templates = Jinja2Templates(directory="templates")
 

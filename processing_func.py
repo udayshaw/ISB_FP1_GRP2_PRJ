@@ -58,6 +58,9 @@ class processing_engine:
     def get_elasticIndex():
         return 'processed_profiles'
     
+    def get_mySQLTable():
+        return 'input_resumes'
+    
     def get_mySQL_session():
         # Create a SQLAlchemy engine and session
         engine = create_engine('mysql+pymysql://group2:isbfp1@localhost/isb_term2_fp1')

@@ -71,7 +71,7 @@ class data_processing:
         Base = declarative_base()
 
         class table_schema(Base):
-            __tablename__ = 'input_resumes'
+            __tablename__ = processing_engine.get_mySQLTable
 
             profileId = Column(String, primary_key=True)
             resume = Column(String)
@@ -146,4 +146,10 @@ class data_processing:
         df_out=pd.DataFrame(df_list,columns=["token","tfidf","profile_id"])
         grouped = df_out.groupby('profile_id')['tfidf'].sum()
         sorted_descending = grouped.sort_values(ascending=False).reset_index()
-        return sorted_descending.head(10).to_html(index=False)
+        sorted_descending["Download Profile"]="file:///resumes_corpus/"+sorted_descending["profile_id"]+".txt"
+        sorted_descending=sorted_descending.rename(columns={'tfidf': 'tfidf score'})
+        html_table=sorted_descending.head(10).to_html(index=False, escape=False, classes='table table-bordered table-striped')
+        html_table = html_table.replace('<td>file:', '<td><a href="files/'). \
+                        replace('.txt</td>', '.txt">download</td>'). \
+                        replace('</td>', '</a></td>')
+        return html_table

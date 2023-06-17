@@ -6,10 +6,9 @@ import spacy
 from collections import Counter
 from elasticsearch import Elasticsearch
 import warnings
-import os, json
+import os, json, traceback, logging
 from elasticsearch.helpers import bulk
 from processing_func import processing_engine
-import logging
 from sqlalchemy import create_engine, Column, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -18,20 +17,20 @@ class data_processing:
     # Configure the logger
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
-    pattern = r'[^a-zA-Z0-9\s\.\-\,]'
+    pattern = r'[^a-zA-Z0-9\s\.\-\,]' #regex pattern to clean resumes and job description
     warnings.filterwarnings('ignore')
-    stopwords = set(nltk.corpus.stopwords.words('english'))
-    nlp = spacy.load("en_core_web_sm")
+    stopwords = set(nltk.corpus.stopwords.words('english')) #fetching stopwords from ntlk
+    nlp = spacy.load("en_core_web_sm") #fetching spacy library for english
 
-    # Create a file handler
-    log_file = '/var/log/FP1_logs/log_file.log'
+    # Create a file handler 
+    log_file = '/var/log/FP1_logs/log_file.log' #log file path
     file_handler = logging.FileHandler(log_file)
 
     # Configure the log file handler
     file_handler.setLevel(logging.INFO)
 
     # Create a formatter and configure it
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s') #log format
     file_handler.setFormatter(formatter)
 
     # Add the file handler to the logger
@@ -40,23 +39,25 @@ class data_processing:
     def __init__(self):
         self.instance_var = "Instance Variable"
 
+    #Function to clean the text and do NLP
     def do_nlp(self, text: str, profile_name : str=''):
+        pe=processing_engine()
         self.logger.info('Processing text')
         content = list(self.nlp(re.sub(self.pattern, '', text)).sents)
         content_new = [[str(i)] for i in content]
         df=pd.DataFrame(content_new, columns=["resume_text"])
         ##############Computing tokens
-        df["tokens"]=df[["resume_text"]].applymap(lambda x: processing_engine.tokenize(x))
+        df["tokens"]=df[["resume_text"]].applymap(lambda x: pe.tokenize(x))
         ##############Computing bigrams
-        df["bigrams"]=df[["resume_text"]].applymap(lambda x: processing_engine.ngrams(processing_engine.tokenize(x), 2, stopwords=self.stopwords))
+        df["bigrams"]=df[["resume_text"]].applymap(lambda x: pe.ngrams(pe.tokenize(x), 2, stopwords=self.stopwords))
         ##############Computing Trigrams
-        df["trigrams"]=df[["resume_text"]].applymap(lambda x: processing_engine.ngrams(processing_engine.tokenize(x), 3, stopwords=self.stopwords))
+        df["trigrams"]=df[["resume_text"]].applymap(lambda x: pe.ngrams(pe.tokenize(x), 3, stopwords=self.stopwords))
         df["phrases"]=df["tokens"]+df["bigrams"]+df["trigrams"]
         df1=df[["phrases"]]
         ##############Computing term frequency(tf)
-        freq_df=processing_engine.count_words(df1,column="phrases")
+        freq_df=pe.count_words(df1,column="phrases")
         ##############Computing IDF
-        idf_df = processing_engine.compute_idf(df1,column="phrases")
+        idf_df = pe.compute_idf(df1,column="phrases")
         ##############Computing TF-IDF
         freq_df['tfidf'] = freq_df['freq'] * idf_df['idf']
         ##############Adding profile Id to DF
@@ -68,20 +69,18 @@ class data_processing:
         return freq_df
 
     def process_content(self, fileName:str, file_content:str):
+        pe=processing_engine()
+        self.logger.info('Initiating Processing profile')
         Base = declarative_base()
 
         class table_schema(Base):
-            __tablename__ = processing_engine.get_mySQLTable
-
+            __tablename__ = pe.get_mySQLTable()
             profileId = Column(String, primary_key=True)
             resume = Column(String)
 
-        Session = processing_engine.get_mySQL_session()
-
-        cnt=0
-        
+        Session = pe.get_mySQL_session()
         profile_name=fileName
-        msg=""
+        msg="" #message to return
         ##############Processing data to put in MySQL   
         try:
             self.logger.debug('Pushing to Mysql Started')
@@ -95,27 +94,31 @@ class data_processing:
             msg="MySQL load successfull."
         except Exception as e:
             msg="MySQL load failed."
-            self.logger.error("Adding data to MySQL failed with error\n"+str(e))
+            self.logger.error("Adding data to MySQL failed with error: "+str(e))
+            traceback.print_exc()
                 
         ##############Processing data to put in Elastic     
         try:
             self.logger.debug('started Proceessing')
-            freq_df=do_nlp(file_content,profile_name)
+            freq_df=self.do_nlp(file_content,profile_name)
 
             ##############Pushing to elastic search
             self.logger.debug('Pushing Data to elastic Index')
-            processing_engine.push_to_elastic(freq_df)
+            pe.push_to_elastic(freq_df)
             self.logger.debug('completed Proceessing')
             msg=msg+"<br>Elastic data load successfull"
-            cnt=cnt+1
-            self.logger.info('Files Proceessed: '+str(cnt))
+            self.logger.info('File Proceessed')
         except Exception as e:
             msg=msg+"<br>Elastic data load failed"
-            self.logger.error('Error processing resume with error\n'+str(e))
+            self.logger.error('Error processing resume with error: '+str(e))
+            traceback.print_exc()
 
         return msg
 
+    #function to search a profile given a JD
     def get_profiles(self, jd :str):
+        pe=processing_engine()
+        self.logger.info('Looking up profiles')
         freq_df=self.do_nlp(jd)
         freq_df=freq_df[["token","tfidf"]]
 
@@ -124,8 +127,8 @@ class data_processing:
             freq_df[freq_df['token'].str.contains(' ')].sort_values("tfidf",ascending=False).head(5)]
             )
         key_list=final_df["token"].to_list()
-        es = processing_engine.connect_elastic()
-        index_name = processing_engine.get_elasticIndex()
+        es = pe.connect_elastic()
+        index_name = pe.get_elasticIndex()
         # Construct the Elasticsearch query body
         query_body = {
         "size": 1000,
@@ -136,13 +139,14 @@ class data_processing:
         }
         }
         query_body=str(query_body).replace("'","\"")
+        #Query Elastic search
         results = es.search(index=index_name, body=json.loads(query_body))
 
         df_list=[]
 
         for hit in results['hits']['hits']:
             df_list.append([hit['_source']['token'],hit['_source']['tfidf'],hit['_source']['profile_id']])
-            
+        #generating output table          
         df_out=pd.DataFrame(df_list,columns=["token","tfidf","profile_id"])
         grouped = df_out.groupby('profile_id')['tfidf'].sum()
         sorted_descending = grouped.sort_values(ascending=False).reset_index()

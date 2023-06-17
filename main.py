@@ -45,7 +45,7 @@ async def read_index(request: Request):
 @app.post("/upload/")
 async def upload_file(file: UploadFile):
     contents = await file.read()
-    decoded_contents = contents.decode("utf-8")
+    decoded_contents = contents.decode("utf-8", errors="ignore")
     dp=data_processing()
     text=dp.process_content(file.filename, decoded_contents)
     return JSONResponse(content={"message": text})

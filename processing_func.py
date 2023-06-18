@@ -21,7 +21,7 @@ class processing_engine:
         return re.findall(r'[\w-]*\p{L}[\w-]*', text.lower())
 
     #function to compute IDF
-    def compute_idf(self, df, column='tokens', preprocess=None, min_df=2):
+    def compute_idf(self, df, column='tokens', preprocess=None, min_df=0):
         def update(doc):
             tokens = doc if preprocess is None else preprocess(doc) 
             counter.update(set(tokens))
@@ -41,7 +41,7 @@ class processing_engine:
         return [sep.join(ngram) for ngram in zip(*[tokens[i:] for i in range(n)]) if len([t for t in ngram if t in stopwords])==0]
 
     #function to compute TF
-    def count_words(self, df, column='tokens', preprocess=None, min_freq=2):
+    def count_words(self, df, column='tokens', preprocess=None, min_freq=0):
         # process tokens and update counter
         def update(doc):
             tokens = doc if preprocess is None else preprocess(doc)

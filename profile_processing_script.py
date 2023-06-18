@@ -80,7 +80,8 @@ class data_processing:
 
         Session = pe.get_mySQL_session()
         profile_name=fileName
-        msg="" #message to return
+        flag =0
+        msg="Profile Processing status:<br>" #message to return
         ##############Processing data to put in MySQL   
         try:
             self.logger.debug('Pushing to Mysql Started')
@@ -91,9 +92,10 @@ class data_processing:
             session.commit()
             session.close()
             self.logger.debug('Pushing to Mysql completed for')
-            msg="MySQL load successfull."
+            msg=msg+"<br>MySQL load successfull."
         except Exception as e:
-            msg="MySQL load failed."
+            flag=1
+            msg=msg+"<br>MySQL load failed."
             self.logger.error("Adding data to MySQL failed with error: "+str(e))
             traceback.print_exc()
                 
@@ -109,9 +111,15 @@ class data_processing:
             msg=msg+"<br>Elastic data load successfull"
             self.logger.info('File Proceessed')
         except Exception as e:
+            flag=1
             msg=msg+"<br>Elastic data load failed"
             self.logger.error('Error processing resume with error: '+str(e))
             traceback.print_exc()
+
+        if flag == 0:
+            msg=msg+"<br><br>File processed successfully."
+        else:
+            msg=msg+"<br><br>File processing Failed."
 
         return msg
 
@@ -148,10 +156,13 @@ class data_processing:
             df_list.append([hit['_source']['token'],hit['_source']['tfidf'],hit['_source']['profile_id']])
         #generating output table          
         df_out=pd.DataFrame(df_list,columns=["token","tfidf","profile_id"])
-        grouped = df_out.groupby('profile_id')['tfidf'].sum()
-        sorted_descending = grouped.sort_values(ascending=False).reset_index()
-        sorted_descending["Download Profile"]="/resumes_corpus/"+sorted_descending["profile_id"]+".txt"
-        sorted_descending=sorted_descending.rename(columns={'tfidf': 'tfidf score'})
+        #grouped = df_out.groupby('profile_id')['tfidf'].sum()
+        grouped = df_out.groupby('profile_id').agg(tfidf=('tfidf','sum'), tokens=('token',lambda x: list(x)))
+        sorted_descending = grouped.sort_values(by='tfidf', ascending=False).reset_index()
+        sorted_descending["Download Link"]="/resumes_corpus/"+sorted_descending["profile_id"]+".txt"
+        sorted_descending=sorted_descending.rename(columns={'tfidf': 'TF_IDF score'}). \
+                                            rename(columns={'tokens': 'Keywords Matched'}). \
+                                            rename(columns={'profile_id': 'Profile Id'})
         html_table=sorted_descending.head(10).to_html(index=False, escape=False, classes='table table-bordered table-striped')
         html_table = html_table.replace('<td>/resumes_corpus/', '<td><a href="/resumes_corpus/'). \
                         replace('.txt</td>', '.txt" target="_blank">download</td>'). \
